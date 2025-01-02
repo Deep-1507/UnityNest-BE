@@ -42,7 +42,7 @@ io.on('connection', (socket) => {
 // Attach `io` to the app object for access in routes
 app.set('io', io);
 
-const port = 3000;
+const port = 8080;
 server.listen(port, () => {
   console.log(`UnityNest Server listening on port ${port}`);
 });
