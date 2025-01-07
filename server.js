@@ -9,7 +9,12 @@ const server = http.createServer(app); // Create an HTTP server
 const io = new Server(server, { cors: { origin: "*" } }); // Initialize WebSocket server
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: '*', // Replace '*' with your frontend URL in production
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 app.use(express.json());
 app.use("/api/v1", rootRouter);
 
@@ -42,7 +47,7 @@ io.on('connection', (socket) => {
 // Attach `io` to the app object for access in routes
 app.set('io', io);
 
-const port = 8080;
+const port = 3000;
 server.listen(port, () => {
   console.log(`UnityNest Server listening on port ${port}`);
 });
