@@ -1,8 +1,11 @@
-const express = require('express');
-const cors = require('cors');
-const http = require('http'); // For creating an HTTP server
-const { Server } = require('socket.io'); // Import socket.io
-const rootRouter = require("./routes/index");
+import express from 'express';
+import cors from 'cors';
+import http from 'http';
+import {Server} from 'socket.io';
+
+import userRouter from './routers/userController.js';
+import taskRouter from './routers/taskController.js';
+import companyRouter from './routers/companyController.js';
 
 const app = express();
 const server = http.createServer(app); // Create an HTTP server
@@ -16,7 +19,11 @@ app.use(cors({
 }));
 
 app.use(express.json());
-app.use("/api/v1", rootRouter);
+
+//routing
+app.use("/api/v1", userRouter);
+app.use("/api/v2", taskRouter);
+app.use("/api/v3", companyRouter);
 
 // WebSocket Integration
 const connectedUsers = new Map();

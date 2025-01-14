@@ -1,17 +1,19 @@
-const express = require("express");
-const router = express.Router();
-const zod = require("zod");
-const { User } = require("../db");
-const jwt = require("jsonwebtoken");
-const { JWT_SECRET } = require("../config");
-const bcrypt = require("bcrypt");
-const { authMiddleware } = require("../middleware");
+import express from "express";
+import { z } from "zod";
+import { User, Company} from "../db.js";
+import jwt from "jsonwebtoken";
+import { JWT_SECRET } from "../config.js";
+import bcrypt from "bcrypt";
+import { authMiddleware } from "../middleware.js";
 
-const signupBody = zod.object({
-  username: zod.string().email(),
-  firstName: zod.string(),
-  lastName: zod.string(),
-  password: zod.string().min(6), // Ensure password has a minimum length
+const router = express.Router();
+
+const signupBody = z.object({ 
+  username: z.string().email(),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  companyName: z.string().min(1),
+  password: z.string().min(6), // Ensure password has a minimum length
 });
 
 router.post("/signup", async (req, res) => {
@@ -24,8 +26,26 @@ router.post("/signup", async (req, res) => {
       });
     }
 
-    // Existing user check
-    const existingUser = await User.findOne({ username: req.body.username });
+    const userCompany = await Company.findOne({companyName:req.body.companyName})
+    
+    if(!userCompany){
+      return res.status(409).json({
+        message:"Company not found. Kindly Contact Admin"
+      })
+    }
+
+
+    
+    // Existing user check only when we want only a signle usename to exist no matter what the company is
+    // const existingUser = await User.findOne({ username: req.body.username});
+    // if (existingUser) {
+    //   return res.status(409).json({
+    //     message: "Existing user",
+    //   });
+    // }
+
+    // Existing user check when we allo a signle user to work with multiple companies
+    const existingUser = await User.findOne({ username: req.body.username, companyID:userCompany._id});
     if (existingUser) {
       return res.status(409).json({
         message: "Existing user",
@@ -40,12 +60,23 @@ router.post("/signup", async (req, res) => {
       firstName: req.body.firstName,
       lastName: req.body.lastName,
       password: hashedpassword,
+      companyName:req.body.companyName,
+      companyID:userCompany._id,
       position: "Member",
       positionseniorityindex: 1,
     });
 
     const userId = user._id;
-    const token = jwt.sign({ userId }, JWT_SECRET);
+    const companyId = userCompany._id;
+    const token = jwt.sign(
+      {
+        userId,
+        companyId
+      }, 
+      JWT_SECRET
+    );
+
+    // console.log(jwt.decode(token))
 
     res.status(201).json({
       message: "User created successfully",
@@ -53,8 +84,9 @@ router.post("/signup", async (req, res) => {
       user: {
         id: user._id,
         username: user.username,
+        companyName:user.companyName
       },
-    });
+    }); 
   } catch (error) {
     console.error("Error during user signup:", error);
     res.status(500).json({
@@ -63,11 +95,12 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-//signin route
 
-const signinBody = zod.object({
-  username: zod.string().email(),
-  password: zod.string(),
+//signin route
+const signinBody = z.object({
+  username: z.string().email(),
+  password: z.string().min(1),
+  companyName:z.string().min(1)
 });
 
 router.post("/signin", async (req, res) => {
@@ -79,11 +112,30 @@ router.post("/signin", async (req, res) => {
     });
   }
 
-  const test_user = await User.findOne({
+  const userCompany = await Company.findOne({companyName:req.body.companyName})
+    
+  if(!userCompany){
+    return res.status(409).json({
+      message:"Company not found. Kindly Contact Admin"
+    })
+  }
+
+  const user = await User.findOne({
     username: req.body.username,
+    companyName:req.body.companyName,
+    companyID:userCompany._id
   });
 
-  if (!test_user) {
+  //this method can also be used
+  // const test_user = await User.findOne({
+  //   $and: [
+  //     { username: req.body.username },
+  //     { companyName: req.body.companyName },
+  //   ],
+  // });
+  
+
+  if (!user) {
     return res.status(401).json({
       message: "Not a registered user",
     });
@@ -91,24 +143,26 @@ router.post("/signin", async (req, res) => {
 
   const isPasswordValid = await bcrypt.compare(
     req.body.password,
-    test_user.password
+    user.password
   );
 
   if (isPasswordValid) {
     const token = jwt.sign(
       {
-        userId: test_user._id,
+        userId: user._id,
+        companyId:userCompany._id
       },
       JWT_SECRET
     );
 
+    // console.log(jwt.decode(token))
     return res.status(200).json({
       message: "Welcome user, you are logged in",
       token: token,
       user: {
-        id: test_user._id,
-        username: test_user.username,
-        // Add other user details if needed
+        id: user._id,
+        username: user.username,
+        companyName:user.companyName
       },
     });
   }
@@ -142,24 +196,26 @@ router.post("/signin", async (req, res) => {
 //     })
 // })
 
+
 router.get("/details", authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
-    const userDetails = await User.findById(userId);
+    const companyId = req.companyId;
+
+    console.log(userId,companyId)
+    
+    const userDetails = await User.findOne(
+      {
+        _id:userId,
+        companyID:companyId,
+      });
 
     if (!userDetails) {
       return res.status(404).json({ message: "User not found" });
     }
 
     res.json({
-      user: {
-        username: userDetails.username,
-        firstName: userDetails.firstName,
-        lastName: userDetails.lastName,
-        _id: userDetails._id,
-        position: userDetails.position,
-        positionseniorityindex: userDetails.positionseniorityindex,
-      },
+     userDetails
     });
   } catch (error) {
     console.error("Error fetching user details:", error);
@@ -171,7 +227,10 @@ router.get("/details", authMiddleware, async (req, res) => {
 router.get("/bulk", authMiddleware, async (req, res) => {
   const filter = req.query.filter || "";
   const userPositionIndex = req.query.userPositionIndex;
-  const userid = req.query.userid;
+  const userid = req.userId;
+  const companyId = req.companyId;
+  
+
 
   const users = await User.find({
     $and: [
@@ -195,24 +254,21 @@ router.get("/bulk", authMiddleware, async (req, res) => {
       {
         _id: { $ne: userid },
       },
+      {
+        companyID:companyId
+      }
     ],
   });
 
   res.json({
-    user: users.map((user) => ({
-      username: user.username,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      _id: user._id,
-      position: user.position,
-      positionseniorityindex: user.positionseniorityindex,
-    })),
+    users
   });
 });
 
 router.get("/bulk-for-messaging", authMiddleware, async (req, res) => {
   const filter = req.query.filter || "";
-  const userid = req.query.userid;
+  const userid = req.userId;
+  const companyId = req.companyId;
 
   const users = await User.find({
     $and: [
@@ -233,19 +289,15 @@ router.get("/bulk-for-messaging", authMiddleware, async (req, res) => {
       {
         _id: { $ne: userid },
       },
+      {
+        companyID:companyId
+      }
     ],
   });
 
   res.json({
-    user: users.map((user) => ({
-      username: user.username,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      _id: user._id,
-      position: user.position,
-      positionseniorityindex: user.positionseniorityindex,
-    })),
+    users
   });
 });
 
-module.exports = router;
+export default router;

@@ -1,125 +1,158 @@
-const express = require("express");
-const router = express.Router();
-const zod = require("zod");
-const { Task } = require("../db");
-const jwt = require("jsonwebtoken");
-const { JWT_SECRET } = require("../config");
-const bcrypt = require("bcrypt");
-const { authMiddleware } = require("../middleware");
+import express from "express";
+import { z } from "zod";
+import { Task } from "../db.js";
+import { authMiddleware } from "../middleware.js";
 
-const taskBody = zod.object({
-  userid: zod.string(),
-  subordinateid: zod.string(),
-  name: zod.string(),
-  task: zod.string(),
-  submissiondate: zod.string(),
+const router = express.Router();
+
+const taskBody = z.object({
+  subordinateid: z.string().min(1),
+  name: z.string().min(1),
+  taskassigneename:z.string().min(1),
+  task: z.string().min(1),
+  submissiondate: z.string().min(1),
 });
 
 router.post("/assigntask", authMiddleware, async (req, res) => {
-  // Input validation check
+  // const { subordinateid, name,taskassigneename, task, submissiondateandtime } = req.body;
+
   const result = taskBody.safeParse(req.body);
   if (!result.success) {
-    return res.status(400).json({
-      message: "Input specified in incorrect format",
-    });
+    return res.status(400).json({ message: "Input specified in incorrect format" });
   }
 
-  // When both checks are successful, add user to the database
-  const task = await Task.create({
-    userid: req.body.userid,
-    subordinateid: req.body.subordinateid,
-    name: req.body.name,
-    task: req.body.task,
-    submissiondate: req.body.submissiondate,
-    status: 0,
-    completedtaskmessage: "",
-  });
-
-  res.json({
-    message: "Task Submitted successfully",
-  });
-});
-
-router.get("/ongoingtaskdetails", authMiddleware, async (req, res) => {
   try {
-    const userId = req.userId; // Assuming authMiddleware sets userId in req
-    const today = new Date().toISOString().split("T")[0];
-
-    // Find all tasks where subordinateid matches userId
-    const taskDetails = await Task.find({
-      subordinateid: userId,
-      submissiondate: { $gte: today },
-      status:0
+    await Task.create({
+      userId: req.userId,
+      subordinateId: req.body.subordinateid,
+      companyId:req.companyId,
+      name:req.body.name,
+      taskassigneename:req.body.taskassigneename,
+      task:req.body.task,
+      submissiondateandtime:req.bosy.submissiondate,
+      timestamp:new Date(),
+      status: 0,
+      completedtaskmessage: "",
     });
 
-    if (!taskDetails || taskDetails.length === 0) {
-      return res.status(404).json({ message: "Tasks not found for this user" });
-    }
-
-    // Prepare response with relevant task details
-    const formattedTasks = taskDetails.map((task) => ({
-      taskid: task._id,
-      taskassignedby: task.userid,
-      taskassignedto: task.subordinateid,
-      taskassignedtoname: task.name,
-      task: task.task,
-      submissiondate: task.submissiondate,
-    }));
-
-    res.json({ tasks: formattedTasks });
+    res.status(200).json({ message: "Task assigned successfully" });
   } catch (error) {
-    console.error("Error fetching user tasks:", error);
+    console.error("Error creating task:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-router.get("/missedtasksdetails", authMiddleware, async (req, res) => {
+router.get("/ongoingtaskdetails", authMiddleware, async (req, res) => {
   try {
-    const userId = req.userId; // Assuming authMiddleware sets userId in req
-    const today = new Date().toISOString().split("T")[0];
+    const userId  = req.userId;
+    const now = new Date();
 
-    // Find all tasks where subordinateid matches userId
     const taskDetails = await Task.find({
       subordinateid: userId,
-      submissiondate: { $lt: today },
+      companyId:req.companyId,
+      submissiondateandtime: { $gte: now },
+      status: 0,
     });
 
-    if (!taskDetails || taskDetails.length === 0) {
-      return res.status(404).json({ message: "Tasks not found for this user" });
+    if (!taskDetails.length) {
+      return res.status(404).json({ message: "No ongoing tasks found" });
     }
 
-    // Prepare response with relevant task details
     const formattedTasks = taskDetails.map((task) => ({
       taskid: task._id,
-      taskassignedby: task.userid,
-      taskassignedto: task.subordinateid,
+      taskassignedby: task.userId,
+      taskassignedto: task.subordinateId,
+      companyId: task.companyId,
       taskassignedtoname: task.name,
+      taskassignedbyname: task.taskassigneename,
       task: task.task,
-      submissiondate: task.submissiondate,
-      status: task.status,
+      submissiondateandtime: task.submissiondateandtime,
+      status:task.status
     }));
 
-    res.json({ tasks: formattedTasks });
+    res.status(200).json({ tasks: formattedTasks });
   } catch (error) {
-    console.error("Error fetching user tasks:", error);
+    console.error("Error fetching ongoing tasks:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+router.get("/missedtaskdetails", authMiddleware, async (req, res) => {
+  try {
+    const userId  = req.userId;
+    const now = new Date();
+
+    const taskDetails = await Task.find({
+      subordinateid: userId,
+      companyId:req.companyId,
+      submissiondateandtime: { $lt: now },
+    });
+
+    if (!taskDetails.length) {
+      return res.status(404).json({ message: "No missed tasks found" });
+    }
+
+    const formattedTasks = taskDetails.map((task) => ({
+      taskid: task._id,
+      taskassignedby: task.userId,
+      taskassignedto: task.subordinateId,
+      companyId: task.companyId,
+      taskassignedtoname: task.name,
+      taskassignedbyname: task.taskassigneename,
+      task: task.task,
+      submissiondateandtime: task.submissiondateandtime,
+      status:task.status
+    }));
+
+    res.status(200).json({ tasks: formattedTasks });
+  } catch (error) {
+    console.error("Error fetching missed tasks:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 router.get("/totaltasksassigned", authMiddleware, async (req, res) => {
   try {
-    const userId = req.userId; // Assuming authMiddleware sets userId in req
-
-    // Find all tasks where subordinateid matches userId
+    const userId  = req.userId;
     const taskDetails = await Task.find({
       subordinateid: userId,
+      companyId:req.companyId,
     });
 
-    if (!taskDetails || taskDetails.length === 0) {
-      return res.status(404).json({ message: "Tasks not found for this user" });
+    if (!taskDetails.length) {
+      return res.status(404).json({ message: "No tasks assigned yet" });
     }
 
-    // Prepare response with relevant task details
+    const formattedTasks = taskDetails.map((task) => ({
+      taskid: task._id,
+      taskassignedby: task.userId,
+      taskassignedto: task.subordinateId,
+      companyId: task.companyId,
+      taskassignedtoname: task.name,
+      taskassignedbyname: task.taskassigneename,
+      task: task.task,
+      submissiondateandtime: task.submissiondateandtime,
+      status:task.status
+    }));
+
+    res.status(200).json({ tasks: formattedTasks });
+  } catch (error) {
+    console.error("Error fetching assugned tasks:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+router.get("/totaltasksdetails", authMiddleware, async (req, res) => {
+  try {
+    const { userId } = req;
+
+    const taskDetails = await Task.find({ userid: userId });
+
+    if (!taskDetails.length) {
+      return res.status(404).json({ message: "No tasks found for this user" });
+    }
+
     const formattedTasks = taskDetails.map((task) => ({
       taskid: task._id,
       taskassignedby: task.userid,
@@ -133,58 +166,23 @@ router.get("/totaltasksassigned", authMiddleware, async (req, res) => {
 
     res.json({ tasks: formattedTasks });
   } catch (error) {
-    console.error("Error fetching user tasks:", error);
+    console.error("Error fetching total task details:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-router.get("/totaltasksdetails", authMiddleware, async (req, res) => {
-    try {
-      const userId = req.userId; // Assuming authMiddleware sets userId in req
-  
-      // Find all tasks where subordinateid matches userId
-      const taskDetails = await Task.find({
-        userid: userId,
-      });
-  
-      if (!taskDetails || taskDetails.length === 0) {
-        return res.status(404).json({ message: "Tasks not found for this user" });
-      }
-  
-      // Prepare response with relevant task details
-      const formattedTasks = taskDetails.map((task) => ({
-        taskid: task._id,
-        taskassignedby: task.userid,
-        taskassignedto: task.subordinateid,
-        taskassignedtoname: task.name,
-        task: task.task,
-        submissiondate: task.submissiondate,
-        status: task.status,
-        message: task.completedtaskmessage,
-      }));
-  
-      res.json({ tasks: formattedTasks });
-    } catch (error) {
-      console.error("Error fetching user tasks:", error);
-      res.status(500).json({ message: "Server error" });
-    }
-  });
-
-const taskDetailsBody = zod.object({
-  taskid: zod.string().min(1),
-  completedTaskDetails: zod.string().min(1),
+const taskDetailsBody = z.object({
+  taskid: z.string().min(1),
+  completedTaskDetails: z.string().min(1),
 });
 
 router.put("/submittask", authMiddleware, async (req, res) => {
   try {
-    const taskid = req.body.taskid;
-    const message = req.body.completedTaskDetails;
+    const { taskid, completedTaskDetails } = req.body;
 
     const result = taskDetailsBody.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({
-        message: "Input specified in incorrect format",
-      });
+      return res.status(400).json({ message: "Input specified in incorrect format" });
     }
 
     const taskDetails = await Task.findById(taskid);
@@ -194,32 +192,29 @@ router.put("/submittask", authMiddleware, async (req, res) => {
     }
 
     taskDetails.status = 1;
-    taskDetails.completedtaskmessage = message;
+    taskDetails.completedtaskmessage = completedTaskDetails;
 
     await taskDetails.save();
 
-    res.json({ message: "Task details submitted" });
+    res.json({ message: "Task submitted successfully" });
   } catch (error) {
-    console.error("Error fetching user tasks:", error);
+    console.error("Error submitting task:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-const missedtaskDetailsBody = zod.object({
-  taskid: zod.string().min(1),
-  missedTaskDetails: zod.string().min(1),
+const missedtaskDetailsBody = z.object({
+  taskid: z.string().min(1),
+  missedTaskDetails: z.string().min(1),
 });
 
 router.put("/submitreason", authMiddleware, async (req, res) => {
   try {
-    const taskid = req.body.taskid;
-    const message = req.body.missedTaskDetails;
+    const { taskid, missedTaskDetails } = req.body;
 
     const result = missedtaskDetailsBody.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).json({
-        message: "Input specified in incorrect format",
-      });
+      return res.status(400).json({ message: "Input specified in incorrect format" });
     }
 
     const taskDetails = await Task.findById(taskid);
@@ -229,15 +224,15 @@ router.put("/submitreason", authMiddleware, async (req, res) => {
     }
 
     taskDetails.status = 2;
-    taskDetails.completedtaskmessage = message;
+    taskDetails.completedtaskmessage = missedTaskDetails;
 
     await taskDetails.save();
 
-    res.json({ message: "Task details submitted" });
+    res.json({ message: "Reason for missed task submitted" });
   } catch (error) {
-    console.error("Error fetching user tasks:", error);
+    console.error("Error submitting missed task reason:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-module.exports = router;
+export default router;
