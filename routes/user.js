@@ -1,10 +1,11 @@
 import express from "express";
 import { z } from "zod";
-import { User, Company} from "../db.js";
+import User from "../models/userModel.js";
+import Company from "../models/companyModel.js";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "../config.js";
 import bcrypt from "bcrypt";
-import { authMiddleware } from "../middleware.js";
+import { authMiddleware } from "../middlewares/authmiddleware.js";
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ const signupBody = z.object({
   lastName: z.string().min(1),
   companyName: z.string().min(1),
   password: z.string().min(6), // Ensure password has a minimum length
-});
+}); 
 
 router.post("/signup", async (req, res) => {
   try {

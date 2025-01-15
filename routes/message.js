@@ -1,8 +1,8 @@
 import express from "express";
 import { z } from "zod";
-import { Message } from "../db.js";
+import  Message  from "../models/messageModel.js";
 import { JWT_SECRET } from "../config.js";
-import { authMiddleware } from "../middleware.js";
+import { authMiddleware } from "../middlewares/authmiddleware.js";
 
 const router = express.Router();
 

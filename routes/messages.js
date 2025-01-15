@@ -1,7 +1,7 @@
 import express from "express";
 import { z as zod } from "zod"; // Named import for Zod
-import { Messages } from "../db.js";
-import { authMiddleware } from "../middleware.js";
+import { authMiddleware } from "../middlewares/authmiddleware.js";
+import Messages from "../models/messagesModel.js";
 
 const router = express.Router();
 

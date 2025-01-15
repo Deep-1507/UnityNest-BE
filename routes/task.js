@@ -1,7 +1,7 @@
 import express from "express";
 import { z } from "zod";
-import { Task } from "../db.js";
-import { authMiddleware } from "../middleware.js";
+import Task from "../models/taskModel.js";
+import { authMiddleware } from "../middlewares/authmiddleware.js";
 
 const router = express.Router();
 

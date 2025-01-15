@@ -2,10 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import http from 'http';
 import {Server} from 'socket.io';
+import 'dotenv/config';
+import mongoose from 'mongoose';
 
-import userRouter from './routers/userController.js';
-import taskRouter from './routers/taskController.js';
-import companyRouter from './routers/companyController.js';
+import userRouter from './controllers/userController.js';
+import taskRouter from './controllers/taskController.js';
+import companyRouter from './controllers/companyController.js';
 
 const app = express();
 const server = http.createServer(app); // Create an HTTP server
@@ -18,7 +20,26 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
+//Put it on when project is finished
+
+// app.use(cors({
+//   origin: ['http://localhost:3000', 'https://your-production-domain.com'],
+//   methods: ['GET', 'POST', 'PUT', 'DELETE'],
+//   allowedHeaders: ['Content-Type', 'Authorization'],
+//   credentials: true, // Enable if needed
+// }));
+
+
 app.use(express.json());
+
+// Connect to MongoDB
+mongoose.connect(process.env.MONGO_DB_CONNECTION_STRING,{
+    useNewUrlParser:true,
+    useUnifiedTopology:true
+})
+.then(()=>console.log('Connected to the Database'))
+.catch((error) => console.log('Error Connecting to Databse',error))
+
 
 //routing
 app.use("/api/v1", userRouter);
@@ -54,7 +75,26 @@ io.on('connection', (socket) => {
 // Attach `io` to the app object for access in routes
 app.set('io', io);
 
-const port = 3000;
+// Graceful Shutdown
+process.on('SIGINT', () => {
+  console.log('Shutting down server...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+// Error Handling
+app.use((req, res, next) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
+const port = process.env.PORT || 3000;
 server.listen(port, () => {
   console.log(`UnityNest Server listening on port ${port}`);
 });

@@ -1,6 +1,6 @@
 import express from "express";
 import { z } from "zod";
-import { Company } from "../db.js";
+import  Company  from "../models/companyModel.js";
 
 const router = express.Router();
 
